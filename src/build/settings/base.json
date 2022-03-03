@@ -1,0 +1,6 @@
+{
+    "app_name": "9ochiha app",
+    "author": "pcFix",
+    "main_module": "src/main/python/main.py",
+    "version": "0.0.0"
+}
