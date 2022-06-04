@@ -2,12 +2,14 @@ import sqlite3
 from sqlite3 import Error
 import pandas as pd
 from itertools import *
+from datetime import datetime
 
 
 class DbConnecter(object):
     def __init__(self, db_file) -> None:
         super(DbConnecter, self).__init__()
         self.conn = None
+        self.db_file = db_file
         self.tables = '''
         CREATE TABLE IF NOT EXISTS tasks (
             id integer PRIMARY KEY,
@@ -42,13 +44,12 @@ class DbConnecter(object):
         result = self.curser.execute(
             f"SELECT day, SUM(price) FROM tasks GROUP BY day"
         )
-
-        return result.fetchall()
+        return sorted(result.fetchall(), key=lambda x: datetime.strptime(x[0], '%d/%m/%Y'))
 
     def MonthlyAmount(self):
         final = {}
         result = self.curser.execute(
-            f"SELECT day, SUM(price) FROM tasks GROUP BY day"
+            f"SELECT day, SUM(price) FROM tasks "
         )
         for i in result.fetchall():
             key = i[0][3:]
