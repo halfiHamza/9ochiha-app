@@ -49,7 +49,7 @@ class DbConnecter(object):
     def MonthlyAmount(self):
         final = {}
         result = self.curser.execute(
-            f"SELECT day, SUM(price) FROM tasks "
+            f"SELECT day, SUM(price) FROM tasks GROUP BY day"
         )
         for i in result.fetchall():
             key = i[0][3:]

@@ -10,6 +10,7 @@ from ui.monthAmount import Ui_MonthForm
 from ui.dayAmount import Ui_DailyForm
 import sys
 from db import DbConnecter
+from datetime import datetime
 
 
 class YearlyAmount(QWidget, Ui_YearForm):
@@ -31,10 +32,15 @@ class MonthlyAmount(QWidget, Ui_MonthForm):
         if data:
             self.tableWidget.setRowCount(len(data))
             for i, k in enumerate(data):
-                self.tableWidget.setItem(i, 0, QTableWidgetItem(str(k)))
-                self.tableWidget.setItem(i, 1, QTableWidgetItem(str(data[k])))
-                self.tableWidget.setItem(
-                    i, 2, QTableWidgetItem(str(data[k] - charge)))
+                date = QTableWidgetItem(str(k))
+                date.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(i, 0, date)
+                amount = QTableWidgetItem(str(data[k]) + ' DA')
+                amount.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(i, 1, amount)
+                subCharge = QTableWidgetItem(str(data[k] - charge) + ' DA')
+                subCharge.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(i, 2, subCharge)
         self.show()
 
 
@@ -47,8 +53,12 @@ class DailyAmount(QWidget, Ui_DailyForm):
         if data:
             self.tableWidget.setRowCount(len(data))
             for i, a in enumerate(data):
-                self.tableWidget.setItem(i, 0, QTableWidgetItem(a[0]))
-                self.tableWidget.setItem(i, 1, QTableWidgetItem(str(a[1])))
+                day = QTableWidgetItem(a[0])
+                day.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(i, 0, day)
+                amount = QTableWidgetItem(str(a[1]) + ' DA')
+                amount.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(i, 1, amount)
         self.show()
 
 
@@ -61,25 +71,23 @@ class App(QMainWindow, Ui_MainWindow):
         self.year = YearlyAmount()
         self.month = MonthlyAmount()
         self.day = DailyAmount()
-        self.header = ['id', 'day', 'receive_n', 'item', 'price', 'remark']
+        self.header = ['Day', 'Receive_n', 'Item', 'Price', 'Remark']
         self.dateEdit.setDate(QDate.currentDate())
-        self.socket = DbConnecter(db_file=db_file)
-        self.db = QSqlDatabase.addDatabase("QSQLITE")
-        self.db.setDatabaseName(self.db_file)
+        self.db = DbConnecter(self.db_file)
         self.insert_tbtn.clicked.connect(self.insert)
         self.refresh_tbtn.clicked.connect(lambda: self.loadDb('All'))
         self.search.textChanged.connect(self.loadDb)
         # calcul amount
         self.Daily_tbtn.clicked.connect(
-            lambda: self.day.setData(self.socket.DailyAmount()))
+            lambda: self.day.setData(self.db.DailyAmount()))
         self.Monthly_tbtn.clicked.connect(
-            lambda: self.month.setData(self.socket.MonthlyAmount(), self.monthlyCharges.value()))
+            lambda: self.month.setData(self.db.MonthlyAmount(), self.monthlyCharges.value()))
         self.Yearly_tbtn.clicked.connect(
-            lambda: self.year.setTotal(str(self.socket.YearlyAmount())))
+            lambda: self.year.setTotal(str(self.db.YearlyAmount())))
         self.loadDb('All')
 
     def insert(self):
-        self.socket.InsertData(
+        self.db.InsertData(
             (self.dateEdit.date().toPyDate().strftime("%d/%m/%Y"),
              self.receiveNspinBox.value(),
              self.ItemLineEdit.text(),
@@ -90,92 +98,79 @@ class App(QMainWindow, Ui_MainWindow):
         self.loadDb('All')
         self.toolButton_2.click()
 
-    def search(self, text):
-        self.db.open()
-        index = 0
-        query = QSqlQuery()
-        query.exec_("select * from tasks")
-        if text == 'All':
-            data = self.db.execute_query("SELECT id, c_type, c_name, concat(current_balance, ' {0}') FROM com_clients".format(
-                self.currencySymbolLineEdit.text()))
-        else:
-            data = self.db.execute_query(
-                "SELECT id, c_type, c_name, concat(current_balance, ' {1}') FROM com_clients "
-                "WHERE id LIKE '{0}%' OR date LIKE '{0}%' OR c_type LIKE '{0}%' OR c_name LIKE '{0}%' OR c_address LIKE '{0}%' OR tlf_fax LIKE '{0}%' OR "
-                "mob LIKE '{0}%' OR email LIKE '{0}%' OR register_n LIKE '{0}%' OR tin LIKE '{0}%' OR ti LIKE '{0}%' OR si LIKE '{0}%' OR technician LIKE '{0}%'".format(
-                    text, self.currencySymbolLineEdit.text())
-            )
-
     def loadDb(self, text):
-        self.db.open()
+        '''
+            day date,
+            receive_n integer,
+            item text VARCHAR(255),
+            price real,
+            remark text VARCHAR(255)
+        '''
         index = 0
-        query = QSqlQuery()
         if text == 'All':
-            query.exec_("select * from tasks ORDER BY day ASC")
+            result = self.db.curser.execute(
+                "select day, receive_n, item, price, remark from tasks")
         else:
-            query.exec_(
-                f"select * from tasks where receive_n like '{text}%' or item like '{text}%' or price like '{text}%' ORDER BY day ASC"
+            result = self.db.curser.execute(
+                f"select day, receive_n, item, price, remark from tasks where receive_n like '{text}%' or item like '{text}%' or price like '{text}%'"
             )
-        while query.next():
-            ids = query.value(0)
-            day = query.value(1)
-            Receive_numbers = query.value(2)
-            items = query.value(3)
-            prices = query.value(4)
-            remarks = query.value(5)
+        data = sorted(result.fetchall(),
+                      key=lambda x: datetime.strptime(x[0], '%d/%m/%Y'))
+        finalData = reversed(data)
+        for i in finalData:
+            day = QTableWidgetItem(str(i[0]))
+            day.setTextAlignment(Qt.AlignCenter)
+            Receive_numbers = QTableWidgetItem(str(i[1]))
+            Receive_numbers.setTextAlignment(Qt.AlignCenter)
+            items = QTableWidgetItem(str(i[2]))
+            items.setTextAlignment(Qt.AlignCenter)
+            prices = QTableWidgetItem(str(i[3]) + ' DA')
+            prices.setTextAlignment(Qt.AlignCenter)
+            remarks = QTableWidgetItem(str(i[4]))
+            remarks.setTextAlignment(Qt.AlignCenter)
             self.tableWidget.setRowCount(index + 1)
-            self.tableWidget.setItem(index, 0, QTableWidgetItem(str(ids)))
-            self.tableWidget.setItem(index, 1, QTableWidgetItem(str(day)))
+            self.tableWidget.setItem(index, 0, day)
             self.tableWidget.setItem(
-                index, 2, QTableWidgetItem(str(Receive_numbers)))
-            self.tableWidget.setItem(index, 3, QTableWidgetItem(items))
-            self.tableWidget.setItem(index, 4, QTableWidgetItem(str(prices)))
-            self.tableWidget.setItem(index, 5, QTableWidgetItem(remarks))
+                index, 1, Receive_numbers)
+            self.tableWidget.setItem(index, 2, items)
+            self.tableWidget.setItem(index, 3, prices)
+            self.tableWidget.setItem(index, 4, remarks)
             index += 1
 
-        self.db.close()
         for i in range(index):
-            # Add edit and delete buttons in the last cell
             self.tableWidget.setCellWidget(
-                i, 6, self.buttonForRow())
+                i, 5, self.buttonForRow())
 
     def UpdateButton(self):
         global liste
         liste = []
         current_row = self.tableWidget.currentRow()
-        current_column = self.tableWidget.currentColumn()
-        cell_value = self.tableWidget.item(current_row, current_column).text()
-        button = self.sender()
-        if button:
-            for i in range(6):
-                liste.append(self.tableWidget.item(
-                    self.tableWidget.currentRow(), i).text())
-            if current_column == 0:
-                self.msg = QMessageBox(QMessageBox.Information, "Kochiha App",
-                                       "Rak baghi tnik sog yalbobo", QMessageBox.Ok)
-                self.msg.show()
-            else:
-                self.socket.curser.execute(f'''
-                UPDATE tasks SET {self.header[current_column]} = "{cell_value}" WHERE id = {liste[0]};
-                ''')
-                self.socket.conn.commit()
-            self.loadDb('All')
+        if current_row != -1:
+            current_column = self.tableWidget.currentColumn()
+            cell_value = self.tableWidget.item(
+                current_row, current_column).text()
+            button = self.sender()
+            if button:
+                for i in range(5):
+                    liste.append(self.tableWidget.item(
+                        self.tableWidget.currentRow(), i).text())
+                self.db.curser.execute(
+                    f"UPDATE tasks SET {self.header[current_column]} = '{cell_value}' WHERE day = '{liste[0]}' AND receive_n = '{liste[1]}' AND item = '{liste[2]}' AND price = '{liste[3]}' AND remark = '{liste[4]}'")
+                self.loadDb('All')
 
     def DeleteButton(self, event):
         global liste
         liste = []
         button = self.sender()
         if button:
-            for i in range(6):
+            for i in range(5):
                 liste.append(self.tableWidget.item(
                     self.tableWidget.currentRow(), i).text())
             replay = QMessageBox.information(
                 self, "Kochiha App", "Really nigga", QMessageBox.Yes | QMessageBox.No)
             if replay == QMessageBox.Yes:
-                self.socket.curser.execute(f'''
-                DELETE FROM tasks WHERE id = {liste[0]};
-                ''')
-                self.socket.conn.commit()
+                self.db.curser.execute(
+                    f"DELETE FROM tasks WHERE day = '{liste[0]}' AND receive_n = '{liste[1]}' AND item = '{liste[2]}' AND price = '{liste[3]}' AND remark = '{liste[4]}'")
                 # This is the key when determining the location
                 row = self.tableWidget.indexAt(button.parent().pos()).row()
                 self.tableWidget.removeRow(row)
@@ -184,17 +179,17 @@ class App(QMainWindow, Ui_MainWindow):
     def buttonForRow(self):
         widget = QWidget()
         # Modify
-        self.updateBtn = QPushButton('modify')
+        self.updateBtn = QPushButton('Edit')
         self.updateBtn.setStyleSheet(''' text-align : center;
-                                          background-color : NavajoWhite;
+                                          background-color : #2ecc71;
                                           height : 30px;
                                           border-style: outset;
                                           font : 13px  ''')
 
         # Delete
-        self.deleteBtn = QPushButton('delete')
+        self.deleteBtn = QPushButton('Delete')
         self.deleteBtn.setStyleSheet(''' text-align : center;
-                                    background-color : LightCoral;
+                                    background-color : #e74c3c;
                                     height : 30px;
                                     border-style: outset;
                                     font : 13px; ''')

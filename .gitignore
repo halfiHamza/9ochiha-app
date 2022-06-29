@@ -1,0 +1,4 @@
+*.pyc
+venv/
+target/
+.qt_for_python/uic/
